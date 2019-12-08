@@ -84,7 +84,7 @@ class GeneralCachePolicy{
       });
 
       while (mem.get_free_mem() < b.second) {
-        access_time += mem.erase(cache.back());
+        access_time += mem.erase(cache.back().first);
         cache.pop_back();
       }
 
