@@ -50,6 +50,8 @@ class Memory{
               data(d), size(s) {
       free_mem = size;
     }
+
+    
     // get data
     const std::unordered_map<block, data_st, hash_pair>& get() const {
       return data;
@@ -70,6 +72,11 @@ class Memory{
   
     // erase a block.
     virtual size_t erase(block b) {};
+
+    // returns the access_time of each of the following actions
+    // but does not take the action.
+    virtual size_t sim_write(block b) {};
+    virtual size_t sim_erase(block b) {};
   
 };
 
@@ -77,7 +84,10 @@ class Memory{
 // are contiguous blocks of memory.
 class BlockMemory : public Memory<bool> {
   public:
-    BlockMemory(int a, std::unordered_map<block, bool, hash_pair> d, size_t s) : Memory<bool>(a,d,s){}
+    BlockMemory(int a, std::unordered_map<block, bool, hash_pair> d, size_t s) :
+      Memory<bool>(a,d,s){}
+
+    BlockMemory(const BlockMemory &m) : Memory(m) {}
 
     // Read time is the size of the block times the access
     // time if block is present, otherwise return 0
@@ -106,6 +116,16 @@ class BlockMemory : public Memory<bool> {
       }
       return 0;
     } 
+
+    size_t sim_write(block b) {
+      if (free_mem >= b.second)
+        return b.second*access_time;
+      else return 0;
+    }
+
+    size_t sim_erase(block b) {
+      if (Memory::data[b])
+        return access_time;
+      return 0;
+    } 
 };
-
-
