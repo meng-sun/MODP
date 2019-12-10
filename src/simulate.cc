@@ -4,11 +4,12 @@
 #include <queue>
 
 #include <string>
-#include <iostream>
+#include <fstream>
 //#include <filesystem>
 
-size_t dram_sz = 300;
+size_t dram_sz = 30;
 
+/*
 struct Game {
   static const int access_sz = 25;
   static const int alphabet_sz = 10;
@@ -19,6 +20,14 @@ struct Game {
                              1, 8, 9, 8, 7, 6, 5};
 
   // repeated patterns
+};*/
+
+struct Game {
+  int access_sz;
+  int alphabet_sz;
+  std::vector<block> alphabet;
+  std::unordered_map<int, size_t> get_block_size;
+  std::vector<int> accesses;
 };
 
 // OPT algorithms.
@@ -217,15 +226,64 @@ int main(){
 
   Game game;
 
+  std::string txt_file = "../data/2.txt";
+  std::ifstream fh_access(txt_file, std::ifstream::in);
+  std::string line;
+
+  while (std::getline(fh_access, line)) {
+    game.accesses.push_back(std::stoi(line));
+  }
+  // 9, 8, 7, 6, 5, 4, 3, 2, 1,
+  // 8, 9, 8, 7, 6, 5, 4, 3, 2,
+  // 1, 8, 9, 8, 7, 6, 5
+
+  game.access_sz = game.accesses.size();
+
+  // Generated.
+  game.alphabet_sz = 23;
+  game.get_block_size[0]=26;
+  game.get_block_size[1]=1;
+  game.get_block_size[2]=1;
+  game.get_block_size[3]=1;
+  game.get_block_size[4]=10;
+  game.get_block_size[5]=2;
+  game.get_block_size[6]=3;
+  game.get_block_size[7]=0;
+  game.get_block_size[8]=0;
+  game.get_block_size[9]=0;
+  game.get_block_size[10]=1;
+  game.get_block_size[11]=0;
+  game.get_block_size[12]=1;
+  game.get_block_size[13]=1;
+  game.get_block_size[14]=1;
+  game.get_block_size[15]=2;
+  game.get_block_size[16]=3;
+  game.get_block_size[17]=1;
+  game.get_block_size[18]=0;
+  game.get_block_size[19]=1;
+  game.get_block_size[20]=2;
+  game.get_block_size[21]=1;
+  game.get_block_size[22]=1;
+
   //Generate alphabet.
   for (int i=0; i<game.alphabet_sz; ++i) {
-    block new_b(i,9*(i+1));
-    std::cout << "created new block: " << new_b.first << "," << new_b.second << std::endl;
-    game.get_block_size[i] = 9*(i+1);
-    game.alphabet.push_back(new_b);
+    if (game.get_block_size[i] != 0) {
+      block new_b(i, game.get_block_size[i]);
+      std::cout << "created new block: " << new_b.first << "," << new_b.second << std::endl;
+      game.alphabet.push_back(new_b);
+    }
+
+    if (game.get_block_size[i] > dram_sz) {
+      std::cerr << "Not enough memory." << std::endl;
+      exit(1);
+    }
+    //block new_b(i,9*(i+1));
+    //game.get_block_size[i] = 9*(i+1);
+    //game.alphabet.push_back(new_b);
   }
 
 
+  std::cout << "Start creating memory." << std::endl;
   std::unordered_map<block, bool, hash_pair> dram_mem;
   //Memory nvram()
   BlockMemory DRAM(10, dram_mem, dram_sz);
@@ -234,6 +292,7 @@ int main(){
   BlockMemory bsDRAM(DRAM);
   bsDRAM.change_name("bsDRAM");
 
+  std::cout << "Start bbsearch." << std::endl;
   int total_run_time = 0;
   for(int i=0; i<game.access_sz; ++i) {
     total_run_time += bb_search(i, bbDRAM, game);
