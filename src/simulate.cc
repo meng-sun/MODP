@@ -2,14 +2,16 @@
 #include "replacement_policies.h"
 #include <iostream>
 #include <queue>
+#include "game.h"
 
 #include <string>
 #include <fstream>
 //#include <filesystem>
 
+/*
 size_t dram_sz = 30;
 
-/*
+
 struct Game {
   static const int access_sz = 25;
   static const int alphabet_sz = 10;
@@ -20,7 +22,7 @@ struct Game {
                              1, 8, 9, 8, 7, 6, 5};
 
   // repeated patterns
-};*/
+};
 
 struct Game {
   int access_sz;
@@ -28,7 +30,7 @@ struct Game {
   std::vector<block> alphabet;
   std::unordered_map<int, size_t> get_block_size;
   std::vector<int> accesses;
-};
+};*/
 
 // OPT algorithms.
 
@@ -231,12 +233,15 @@ int main(int argc, char* argv[]){
   Game game;
 
   std::string txt_file = argv[1];
-  std::ifstream fh_access(txt_file, std::ifstream::in);
+  parse_Game(txt_file, game);
+  /*std::ifstream fh_access(txt_file, std::ifstream::in);
   std::string line;
 
   while (std::getline(fh_access, line)) {
     game.accesses.push_back(std::stoi(line));
   }
+  fh_access.close();
+
   // 9, 8, 7, 6, 5, 4, 3, 2, 1,
   // 8, 9, 8, 7, 6, 5, 4, 3, 2,
   // 1, 8, 9, 8, 7, 6, 5
@@ -284,10 +289,8 @@ int main(int argc, char* argv[]){
     //block new_b(i,9*(i+1));
     //game.get_block_size[i] = 9*(i+1);
     //game.alphabet.push_back(new_b);
-  }
+  }*/
 
-
-  std::cout << "Start creating memory." << std::endl;
   std::unordered_map<block, bool, hash_pair> dram_mem;
   //Memory nvram()
   BlockMemory DRAM(10, dram_mem, dram_sz);
@@ -296,7 +299,6 @@ int main(int argc, char* argv[]){
   BlockMemory bsDRAM(DRAM);
   bsDRAM.change_name("bsDRAM");
 
-  std::cout << "Start bbsearch." << std::endl;
   int total_run_time = 0;
   for(int i=0; i<game.access_sz; ++i) {
     total_run_time += bb_search(i, bbDRAM, game);

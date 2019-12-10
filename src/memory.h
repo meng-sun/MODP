@@ -18,6 +18,9 @@
 // its size.
 typedef std::pair<int, size_t> block;
 
+std::ostream& operator<<(std::ostream& os, const block& b) {
+  os << b.first << ", " << b.second << std::endl;
+}
 
 // The Memory class is a simulation of DRAM or NVRAM.
 //
@@ -62,6 +65,14 @@ class Memory{
     const std::unordered_map<block, data_st, hash_pair>& get() const {
       return data;
     }
+
+    std::string get_data_short() const {
+      std::string mem_short;
+      for (auto it = data.begin(); it != data.end(); ++it)
+        mem_short += std::to_string(it->first) + " ";
+      return mem_short.substr(0, mem_short.size()-2);
+    }
+
     const size_t get_free_mem() const {
       return free_mem;
     }
