@@ -121,16 +121,17 @@ class BlockMemory : public Memory<bool> {
     // time if block is present, otherwise return 0
     size_t read(block b) {
       if(Memory::data[b]) {
-        if (debug) std::cout << "reading block " << b.first << " of size " << b.second << std::endl;
+        if (debug) std::cout << name << "| reading block " << b.first << " of size " << b.second << std::endl;
         return b.second*access_time;
       } else { return 0; }
     }
 
     // Write time is the size of the block times the access
     // time if enough space is present, otherwise return 0
+    // Does not check if item exists already.
     size_t write(block b) {
       if (Memory::free_mem >= b.second) {
-        if (debug) std::cout << "writing block " << b.first << " of size " << b.second  << std::endl;
+        if (debug) std::cout << name << "| writing block " << b.first << " of size " << b.second  << std::endl;
         Memory::data[b] = true;
         Memory::free_mem -= b.second;
         return b.second*access_time;
@@ -141,7 +142,7 @@ class BlockMemory : public Memory<bool> {
     // time if enough space is present, otherwise return 0
     size_t erase(block b) {
       if (Memory::data[b]) {
-        if (debug) std::cout << "erasing block " << b.first << " of size " << b.second << std::endl;
+        if (debug) std::cout << name << "| erasing block " << b.first << " of size " << b.second << std::endl;
         Memory::data.erase(b);
         Memory::free_mem += b.second;
         return access_time;

@@ -9,8 +9,6 @@
 class GeneralCachePolicy{
   std::unordered_map<block, int, hash_pair> recency; 
   std::unordered_map<block, int, hash_pair> frequency; 
-  BlockMemory mem;
-
   
   // Generally for LRU we want our algorithm to do something
   // along the lines of:
@@ -43,6 +41,7 @@ class GeneralCachePolicy{
   void LRFU_penalize(std::vector<std::pair<block, size_t>>& cache, block b) {}
 
   public:
+    BlockMemory mem;
     void print_memory() {
       std::cout << mem << std::endl;
     }

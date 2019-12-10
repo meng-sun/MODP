@@ -6,6 +6,8 @@
 
 #include <string>
 #include <fstream>
+
+static const OUTPUT_TO_FILE = true;
 //#include <filesystem>
 
 /*
@@ -91,12 +93,12 @@ int bf_search(int idx, BlockMemory& mem, Game g) {
 }
 
 // Branch and bound OPT.
-int bb_search(int idx, BlockMemory& mem, Game g) {
+std::pair<int,std::string> bb_search(int idx, BlockMemory& mem, Game g) {
   block b = block(g.accesses[idx], g.get_block_size[g.accesses[idx]]);
   //block b = block(accesses[idx], get_block_size[accesses[idx]]);
 
   int access_time = mem.read(b);
-  if (access_time !=0) return access_time;
+  if (access_time !=0) return std::pair<int,std::string>(access_time,"_");
 
   std::unordered_map<block, bool, hash_pair> data = mem.get();
   std::vector<std::pair<block, int>> cache;
@@ -115,13 +117,17 @@ int bb_search(int idx, BlockMemory& mem, Game g) {
     return a.second < b.second;
   });
 
+  std::string removed_blocks;
   while (mem.get_free_mem() < b.second) {
+    removed_blocks += std::to_string(cache.back().first.first) + ",";
     access_time += mem.erase(cache.back().first);
     cache.pop_back();
   }
 
+  if (removed_blocks.size() == 0)
+    removed_blocks = "_,";
   access_time += mem.write(b);
-  return access_time;
+  return std::pair<int,std::string>(access_time, removed_blocks.substr(0, removed_blocks.size()-1));
 }
 
 // Best-search OPT.
@@ -299,9 +305,14 @@ int main(int argc, char* argv[]){
   BlockMemory bsDRAM(DRAM);
   bsDRAM.change_name("bsDRAM");
 
+  std::string opt;
   int total_run_time = 0;
+  std::pair<int, std::string> info;
   for(int i=0; i<game.access_sz; ++i) {
-    total_run_time += bb_search(i, bbDRAM, game);
+    info = bb_search(i, bbDRAM, game);
+    total_run_time += info.first;
+    opt += info.second + " ";
+    std::cout << "info.second |" << info.second << std::endl; 
   }
   std::cout << "bbsearch: " << total_run_time << std::endl;
   std::cout << bbDRAM << std::endl;
@@ -331,5 +342,18 @@ int main(int argc, char* argv[]){
   // more along the times of file rewrite
   // in between hardware specific and general...
 
+  if (OUTPUT_TO_FILE) {
+    std::string access_string;
+    for (int e:game.accesses)
+      access_string += std::to_string(e) + " ";
+    access_string = access_string.substr(0, access_string.size()-1);
   
+    std::cout << "\n" << access_string << std::endl;
+    std::cout << opt << std::endl;
+  
+    std::ofstream fh_out("test.txt", std::fstream::app);
+    fh_out << access_string << std::endl;
+    fh_out << opt << std::endl;
+    fh_out.close();
+  }
 }

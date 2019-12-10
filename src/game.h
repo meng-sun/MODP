@@ -69,9 +69,10 @@ struct Game {
     }
   }
 
-  Game(const std::vector<int>& a) : Game() {
+  Game(std::vector<int> a) : Game() {
+    access_sz = a.size();
+    accesses.resize(access_sz);
     std::copy(a.begin(), a.end(), accesses.begin());
-    access_sz = accesses.size();
   }
 };
 
