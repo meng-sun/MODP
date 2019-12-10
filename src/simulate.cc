@@ -213,7 +213,7 @@ int bfk_search(int idx, BlockMemory& mem, Game g) {
 // MCMC OPT.
 
 
-int main(){
+int main(int argc, char* argv[]){
   // can adapt over time, much cheaper to maintain
   // Let's have the dataset be the same
   // Graph input should be BLOCK_ID weight
@@ -223,10 +223,14 @@ int main(){
   //    // have stiff boxes.
   //    std::cout << entry.path() << std::endl;
   //    fh_graph = std::ifstream
+  if (argc < 1) {
+    std::cerr << "Missing access file." << std::endl;
+    exit(1);
+  }
 
   Game game;
 
-  std::string txt_file = "../data/2.txt";
+  std::string txt_file = argv[1];
   std::ifstream fh_access(txt_file, std::ifstream::in);
   std::string line;
 
