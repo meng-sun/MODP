@@ -62,6 +62,7 @@ class GeneralCachePolicy{
         frequency[it->first]=1;
       }
     }
+
   int access(block b, int time) {
     int access_time = mem.read(b);
 
@@ -91,6 +92,16 @@ class GeneralCachePolicy{
       recency[b] = time;
       return access_time;
     }
+  }
+
+  void update_recency(block b, int time) {
+    if (recency.count(b) == 0) return;
+    recency[b] = time;
+  }
+
+  void increment_frequency(block b) {
+    if (frequency.count(b) == 0) return;
+    frequency[b]++;
   }
 };
 

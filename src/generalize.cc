@@ -1,8 +1,9 @@
-#include <fstream>
-#include <string>
 #include "replacement_policies.h"
 #include "memory.h"
 #include "game.h"
+#include <fstream>
+#include <string>
+#include <sstream>
 
 // Calculate minimum distance.
 
@@ -11,7 +12,7 @@
 // but I don't have time to build a probabilistic
 // model.
 
-std::pair<int,int> edit_distance_fast(std::string& opt_access, std::string& access) {
+std::pair<int,int> edit_distance_fast(const std::string& opt_access, const std::string& access) {
   int unmatched_idx = 0;
   while (opt_access[unmatched_idx] == access[unmatched_idx]) {
     unmatched_idx++;
@@ -41,12 +42,13 @@ int main(int argc, char* argv[]) {
   std::vector<int> accesses;
   accesses.resize(access_string.size()-1);
   for (int i=0; i<accesses.size(); ++i) {
-    accesses[i] = std::stoi(access_string[i]);
+    accesses[i] = std::stoi(std::to_string(access_string[i]));
   }
 
   Game game(accesses);
   std::unordered_map<block, bool, hash_pair> dram_mem;
   BlockMemory DRAM(10, dram_mem, dram_sz);
+  GeneralCachePolicy generalized_copy(game.alphabet, DRAM);
 
   BlockMemory gcpDRAM(DRAM);
   gcpDRAM.change_name("gcpDRAM");
@@ -65,7 +67,7 @@ int main(int argc, char* argv[]) {
 
   for (int i=0; i< access_string.size(); ++i) {
   
-    std::ofstream fh(library_file, std::ofstream::in);
+    std::ifstream fh(library_file, std::ifstream::in);
     std::string line;
 
     int min_edit_distance;
@@ -75,12 +77,11 @@ int main(int argc, char* argv[]) {
   
     int threshold_factor = 10;
 
-    std::vector<std::string> opt_replace;
-    //???
+    std::vector<std::vector<int>> opt_replace;
 
     while (std::getline(fh, line)) {
       std::pair<int, int> info = edit_distance_fast(line, access_string.substr(0, i));
-      if (distance > threshold_factor) {
+      if (info.first > threshold_factor) {
         if (info.first < min_edit_distance) {
           min_edit_distance = info.first;
           /*replacement.clear();
@@ -96,31 +97,48 @@ int main(int argc, char* argv[]) {
             } else {
               replacement[info.second] = 1;
             }
-          }*/
+          }
           min_edit_distance.push_back(line);
+        }*/
+      }
+
+      // Would be faster to separate this from main loop.
+      std::getline(fh, line);
+      std::istringstream iss_idx(line);
+      std::string result_idx;
+      while (std::getline(iss_idx, result_idx, ' ')) {
+        std::istringstream iss_blockid(line);
+        std::string result_blockid;
+        std::vector<int> removed_blocks;
+        while (std::getline(iss_blockid, result_blockid, ',')) {
+          removed_blocks.push_back(std::stoi(result_blockid));
         }
+        opt_replace.push_back(removed_blocks);
       }
     }
 
-    if (replacement.size() == 0) {
+    block b = block(accesses[i], game.get_block_size[accesses[i]]);
+    if (min_edit_distance > 0.5*game.access_sz) {
       //LRU
+      generalized_runtime += generalized_copy.access(b, i);
     } else {
-      int max = 0;
+      /*int max = 0;
       for (auto it=replacement.begin(); it != replacement.end(); ++it) {
         if (it->second > max)
           max = it->second;
-      }
+      }*/
       // Replace it.
       for (int e:opt_replace[replacement_idx])
-        DRAM.erase(block(e, game.get_block_size[e]), i);
-      DRAM.write()
+        generalized_runtime += DRAM.erase(block(e, game.get_block_size[e]));
+      generalized_runtime += DRAM.write(b);
+      generalized_copy.update_recency(b, i);
       
     }
 
     // LRU baseline
-    gcp_runtime += gcp.access(block(game.accesses[i], game.get_block_size[game.accesses[i]]), i);
+    gcp_runtime += gcp.access(b, i);
   
-    fh.close()
+    fh.close();
   }
 
   std::cout << "Final runtimes for access: " << access_string << std::endl;
