@@ -6,11 +6,10 @@
 
 // Implements least recently used, least frequently used,
 // as well as mix between recency and frequency.
-template <typename MemType>
 class GeneralCachePolicy{
-  std::unordered_map<block, size_t, hash_pair> recency; 
-  std::unordered_map<block, size_t, hash_pair> frequency; 
-  MemType mem;
+  std::unordered_map<block, int, hash_pair> recency; 
+  std::unordered_map<block, int, hash_pair> frequency; 
+  BlockMemory mem;
 
   
   // Generally for LRU we want our algorithm to do something
@@ -21,9 +20,8 @@ class GeneralCachePolicy{
 
   // However this is ugly
   void LRU_penalize(std::vector<std::pair<block, size_t>>& cache, block b) {
-    std::unordered_map<block, bool, hash_pair>& data = mem.get();
-    for (std::unordered_map<block, bool, hash_pair>::iterator it = data.begin();
-         it != data.end(); ++it)
+    const std::unordered_map<block, bool, hash_pair>& data = mem.get();
+    for (auto it = data.begin(); it != data.end(); ++it)
       cache.push_back(std::pair<block, size_t>(it->first, recency[it->first]));
 
     for (auto& e: cache) {
@@ -32,9 +30,8 @@ class GeneralCachePolicy{
   }
 
   void LFU_penalize(std::vector<std::pair<block, size_t>>& cache, block b) {
-    std::unordered_map<block, bool, hash_pair>& data = mem.get();
-    for (std::unordered_map<block, bool, hash_pair>::iterator it = data.begin();
-         it != data.end(); ++it)
+    const std::unordered_map<block, bool, hash_pair>& data = mem.get();
+    for (auto it = data.begin(); it != data.end(); ++it)
       cache.push_back(std::pair<block, size_t>(it->first, frequency[it->first]));
 
     for (std::pair<block, size_t>& e: cache) {
@@ -46,23 +43,26 @@ class GeneralCachePolicy{
   void LRFU_penalize(std::vector<std::pair<block, size_t>>& cache, block b) {}
 
   public:
+    void print_memory() {
+      std::cout << mem << std::endl;
+    }
+
     // Initialize every data to 0 except the data that is
     // currently in the memory, which is set to 1
-    GeneralCachePolicy(std::vector<block> dataset, MemType m) :
+    GeneralCachePolicy(std::vector<block> dataset, BlockMemory m) :
                      mem(m) {
       for (block& b: dataset) {
         recency[b]=0;
         frequency[b]=0;
       }
   
-      std::unordered_map<block, bool, hash_pair>& data = mem.get();
-      for (std::unordered_map<block, bool, hash_pair>::iterator it =
-           data.begin(); it != data.end(); ++it) {
+      const std::unordered_map<block, bool, hash_pair>& data = mem.get();
+      for (auto it = data.begin(); it != data.end(); ++it) {
         recency[it->first]=1;
         frequency[it->first]=1;
       }
     }
-  int access(block b, size_t time) {
+  int access(block b, int time) {
     int access_time = mem.read(b);
 
     if (access_time != 0) {
@@ -71,8 +71,6 @@ class GeneralCachePolicy{
       return access_time;
 
     } else {
-      assert(b.second <= mem.get_size());
-
       std::vector<std::pair<block, size_t>> cache;
 
       LRU_penalize(cache, b);
@@ -89,7 +87,7 @@ class GeneralCachePolicy{
       }
 
       access_time += mem.write(b);
-      frequency += 1;
+      frequency[b] += 1;
       recency[b] = time;
       return access_time;
     }

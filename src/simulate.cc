@@ -3,14 +3,22 @@
 #include <iostream>
 #include <queue>
 
-size_t dram_sz = 100;
+#include <string>
+#include <iostream>
+//#include <filesystem>
+
+size_t dram_sz = 300;
 
 struct Game {
-  static const int access_sz = 5;
+  static const int access_sz = 25;
   static const int alphabet_sz = 10;
   std::vector<block> alphabet;
   std::unordered_map<int, size_t> get_block_size;
-  int accesses[access_sz] = {1, 2, 3, 4, 5};
+  int accesses[access_sz] = {9, 8, 7, 6, 5, 4, 3, 2, 1,
+                             8, 9, 8, 7, 6, 5, 4, 3, 2,
+                             1, 8, 9, 8, 7, 6, 5};
+
+  // repeated patterns
 };
 
 // OPT algorithms.
@@ -75,7 +83,6 @@ int bf_search(int idx, BlockMemory& mem, Game g) {
 int bb_search(int idx, BlockMemory& mem, Game g) {
   block b = block(g.accesses[idx], g.get_block_size[g.accesses[idx]]);
   //block b = block(accesses[idx], get_block_size[accesses[idx]]);
-  std::cout << "b is " << b.first << " , " << b.second << std::endl;
 
   int access_time = mem.read(b);
   if (access_time !=0) return access_time;
@@ -98,7 +105,6 @@ int bb_search(int idx, BlockMemory& mem, Game g) {
   });
 
   while (mem.get_free_mem() < b.second) {
-    std::cout << "removed " << cache.back().first.first << std::endl;
     access_time += mem.erase(cache.back().first);
     cache.pop_back();
   }
@@ -199,6 +205,15 @@ int bfk_search(int idx, BlockMemory& mem, Game g) {
 
 
 int main(){
+  // can adapt over time, much cheaper to maintain
+  // Let's have the dataset be the same
+  // Graph input should be BLOCK_ID weight
+  // Access input should be a BLOCK_ID in order of access times
+  //std::string path = "/path/to/directory";
+  //for (const auto & entry : std::filesystem::directory_iterator(path))
+  //    // have stiff boxes.
+  //    std::cout << entry.path() << std::endl;
+  //    fh_graph = std::ifstream
 
   Game game;
 
@@ -214,11 +229,42 @@ int main(){
   std::unordered_map<block, bool, hash_pair> dram_mem;
   //Memory nvram()
   BlockMemory DRAM(10, dram_mem, dram_sz);
-  std::cout << DRAM.write(game.alphabet.front()) << std::endl; 
+  BlockMemory bbDRAM(DRAM);
+  bbDRAM.change_name("bbDRAM");
+  BlockMemory bsDRAM(DRAM);
+  bsDRAM.change_name("bsDRAM");
 
   int total_run_time = 0;
   for(int i=0; i<game.access_sz; ++i) {
-    total_run_time += bb_search(i, DRAM, game);
+    total_run_time += bb_search(i, bbDRAM, game);
   }
-  std::cout << total_run_time << std::endl;
+  std::cout << "bbsearch: " << total_run_time << std::endl;
+  std::cout << bbDRAM << std::endl;
+
+  total_run_time = 0;
+  for(int i=0; i<game.access_sz; ++i) {
+    total_run_time += bs_search(i, bsDRAM, game);
+  }
+  std::cout << "bssearch: " << total_run_time << std::endl;
+  std::cout << bsDRAM << std::endl;
+
+  BlockMemory gcpDRAM(DRAM);
+  gcpDRAM.change_name("gcpDRAM");
+  GeneralCachePolicy gcp(game.alphabet, gcpDRAM);
+  total_run_time = 0;
+  for(int i=0; i<game.access_sz; ++i) {
+    total_run_time += gcp.access(block(game.accesses[i], game.get_block_size[game.accesses[i]]), i);
+  }
+  std::cout << "lrucache: " << total_run_time << std::endl;
+  gcp.print_memory();
+
+  // Know whether it is temporal or bfs.
+  // min reuse distance along sizes and ids.
+  // default back to LRU.
+
+  // large chunks of data...
+  // more along the times of file rewrite
+  // in between hardware specific and general...
+
+  
 }

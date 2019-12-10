@@ -5,6 +5,8 @@
 #include <map>
 #include <vector>
 #include <functional>
+#include <iostream>
+#include <string>
 
 // Describes how memory functions.
 
@@ -43,14 +45,18 @@ class Memory{
     size_t size;
     size_t free_mem;
     int access_time;
+    std::string name;
     std::unordered_map<block, data_st, hash_pair> data;
 
   public:
-    Memory(int a, std::unordered_map<block, data_st, hash_pair> d, size_t s) : access_time(a),
-              data(d), size(s) {
+    Memory(int a, std::unordered_map<block, data_st, hash_pair> d, size_t s, std::string n="DRAM") : access_time(a),
+              data(d), size(s), name(n) {
       free_mem = size;
     }
 
+    void change_name(std::string n) {
+      name = n;
+    }
     
     // get data
     const std::unordered_map<block, data_st, hash_pair>& get() const {
@@ -77,31 +83,45 @@ class Memory{
     // but does not take the action.
     virtual size_t sim_write(block b) {};
     virtual size_t sim_erase(block b) {};
-  
+
+    friend std::ostream& operator<<(std::ostream& os, const Memory<bool>& m);
 };
+
+std::ostream& operator<<(std::ostream& os, const Memory<bool>& m) {
+  os << "Printing contents of " << m.name << "--------------" << std::endl;
+  for (auto i = m.data.begin(); i != m.data.end(); ++i)
+    os << "block: " << i->first.first << " " << i->first.second << std::endl;
+  os << "---------------------------------------" << std::endl;
+  os << "FreeMEM: " << m.free_mem << std::endl;
+  os << "---------------------------------------" << std::endl;
+}
 
 // implementation of Memory where the data structures
 // are contiguous blocks of memory.
 class BlockMemory : public Memory<bool> {
+    bool debug = true;
   public:
-    BlockMemory(int a, std::unordered_map<block, bool, hash_pair> d, size_t s) :
-      Memory<bool>(a,d,s){}
+    BlockMemory(int a, std::unordered_map<block, bool, hash_pair> d, size_t s, std::string n="DRAM") :
+      Memory<bool>(a,d,s,n){}
 
     BlockMemory(const BlockMemory &m) : Memory(m) {}
 
     // Read time is the size of the block times the access
     // time if block is present, otherwise return 0
     size_t read(block b) {
-      if(Memory::data[b]) { return b.second*access_time; }
-      else { return 0; }
+      if(Memory::data[b]) {
+        if (debug) std::cout << "reading block " << b.first << " of size " << b.second << std::endl;
+        return b.second*access_time;
+      } else { return 0; }
     }
 
     // Write time is the size of the block times the access
     // time if enough space is present, otherwise return 0
     size_t write(block b) {
-      if (free_mem >= b.second) {
+      if (Memory::free_mem >= b.second) {
+        if (debug) std::cout << "writing block " << b.first << " of size " << b.second  << std::endl;
         Memory::data[b] = true;
-        free_mem -= b.second;
+        Memory::free_mem -= b.second;
         return b.second*access_time;
       } else return 0;
     }
@@ -110,15 +130,16 @@ class BlockMemory : public Memory<bool> {
     // time if enough space is present, otherwise return 0
     size_t erase(block b) {
       if (Memory::data[b]) {
+        if (debug) std::cout << "erasing block " << b.first << " of size " << b.second << std::endl;
         Memory::data.erase(b);
-        free_mem += b.second;
+        Memory::free_mem += b.second;
         return access_time;
       }
       return 0;
     } 
 
     size_t sim_write(block b) {
-      if (free_mem >= b.second)
+      if (Memory::free_mem >= b.second)
         return b.second*access_time;
       else return 0;
     }
