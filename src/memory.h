@@ -69,7 +69,7 @@ class Memory{
     std::string get_data_short() const {
       std::string mem_short;
       for (auto it = data.begin(); it != data.end(); ++it)
-        mem_short += std::to_string(it->first) + " ";
+        mem_short += std::to_string(it->first.first) + " ";
       return mem_short.substr(0, mem_short.size()-2);
     }
 
@@ -122,7 +122,7 @@ class BlockMemory : public Memory<bool> {
     size_t read(block b) {
       if(Memory::data[b]) {
         if (debug) std::cout << name << "| reading block " << b.first << " of size " << b.second << std::endl;
-        return b.second*access_time;
+        return access_time;
       } else { return 0; }
     }
 
@@ -135,18 +135,22 @@ class BlockMemory : public Memory<bool> {
         Memory::data[b] = true;
         Memory::free_mem -= b.second;
         return b.second*access_time;
-      } else return 0;
+      }
+      if (debug) std::cout << name << "| couldn't write block " << b.first << " of size " << b.second << std::endl;
+      return 0;
     }
 
     // Write time is the size of the block times the access
     // time if enough space is present, otherwise return 0
     size_t erase(block b) {
-      if (Memory::data[b]) {
+      if (Memory::data.find(b) != Memory::data.end()) {
         if (debug) std::cout << name << "| erasing block " << b.first << " of size " << b.second << std::endl;
         Memory::data.erase(b);
         Memory::free_mem += b.second;
         return access_time;
       }
+      if (debug) std::cout << name << "| didn't find block to erase " << b.first << " of size " << b.second << std::endl;
+      if (debug) std::cout << name << "| Memory contents: " << Memory::data[b] << " " << Memory::get_data_short() << std::endl;
       return 0;
     } 
 

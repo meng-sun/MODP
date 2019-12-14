@@ -5,6 +5,8 @@
 #include <string>
 #include <sstream>
 
+static const bool COLLECT_DATA=true;
+
 // Calculate minimum distance.
 
 // Open library of sequences. Choose either BFS
@@ -26,10 +28,76 @@ std::pair<int,int> edit_distance_fast(const std::string& opt_access, const std::
 // This is the actual algorithm, but it might run
 // worse than exact matching because I will have access
 // gaps.
-/*
-int edit_distance(std::string& a, std::string& b) {
 
-}*/
+// a must be opt
+// b must be access
+std::pair<int,int> edit_distance_slow(const std::string& a, const std::string& b) {
+  std::vector<std::vector<int>> dp;
+  int B = b.size()+1;
+  int A = a.size()+1;
+  
+  int swap_penalty = 2;
+  int addrem_penalty = 1;
+  
+  // extend it by 1 on both sides in order
+  // to include the empty string
+  dp.resize(A);
+  for (auto& e: dp)
+    e.resize(B);
+  
+  // penalize these guys harder
+  for(int i=0; i<B; ++i) dp.at(0).at(i) = i*5;
+  for (int i=0; i<A; ++i) dp.at(i).at(0)=i;
+
+  for (int i=1; i<A; i++) {
+    for (int j=1; j<B; j++) {
+      if (a.at(i-1) == b.at(j-1)) {
+        dp.at(i).at(j) = dp.at(i-1).at(j-1); 
+      } else {
+        // add/remove to one or the other string
+        int m = std::min(dp.at(i).at(j-1) +addrem_penalty,
+                         dp.at(i-1).at(j) +addrem_penalty);
+        // swap
+        // add distance to swap penalty
+        dp.at(i).at(j) = std::min(m, dp.at(i-1).at(j-1)+swap_penalty);
+      }
+    }
+  }
+
+  // now to figure out the path
+  int i=A-1;
+  int j=B-1;
+  while (j == B-1) {
+    int i_, j_;
+    if(dp.at(i-1).at(j) < dp.at(i).at(j-1)) {
+      i_ = i-1;
+      j_ = j;
+    } else {
+      i_ = i;
+      j_ = j-1;
+    }
+    if(dp.at(i_).at(j_) < dp.at(i-1).at(j-1)) {
+      i = i_;
+      j = j_;
+    } else {
+      i--;
+      j--;
+    }
+  }
+
+  /*
+  std::cout << " i j " << i << " " << j << std::endl;
+  for (auto& e: dp) {
+    for (auto& f :e)
+      std::cout << f << " ";
+    std::cout << std::endl;
+  }*/
+
+  int replacement = i-1;
+  std::pair<int,int> ret(dp.at(A-1).at(B-1), replacement);
+
+  return ret;
+}
 
 
 int main(int argc, char* argv[]) {
@@ -84,6 +152,12 @@ int main(int argc, char* argv[]) {
   std::cout << "Start computation.\n" << std::endl;
   for (int i=0; i<game.access_sz; ++i) {
     std::cout << "Accessing: " << game.accesses[i] << std::endl;
+    block b = block(accesses[i], game.get_block_size[accesses[i]]);
+    int read_time = generalized_copy.mem.read(b);
+    if (read_time != 0) {
+        generalized_copy.update_recency(b, i);
+        continue;
+    }
     std::ifstream fh(library_file, std::ifstream::in);
     std::string line;
 
@@ -101,8 +175,10 @@ int main(int argc, char* argv[]) {
     std::unordered_map<int,std::vector<int>> opt_replace;
 
     while (std::getline(fh, line)) {
-      std::pair<int, int> info = edit_distance_fast(line, access_string.substr(0, i));
+      std::pair<int, int> info = edit_distance_fast(line, access_string.substr(0, i+1));
+      //std::pair<int, int> info = edit_distance_slow(line, access_string.substr(0, i+1));
       //std::cout << "from library line: " << line << " we have: " << info.first << "," << info.second << std::endl;
+      //std::cout << "exited edit_distance" << std::endl;
       if (info.first < threshold_factor) {
         if (info.first < min_edit_distance) {
           min_edit_distance = info.first;
@@ -154,8 +230,14 @@ int main(int argc, char* argv[]) {
       std::cout << std::endl;*/
     }
 
-    block b = block(accesses[i], game.get_block_size[accesses[i]]);
-    if (replacement_idx <= 0) {
+    //block b = block(accesses[i], game.get_block_size[accesses[i]]);
+
+    bool not_feasible = false;
+    for (int e:opt_replace[replacement_idx]) {
+      int f = generalized_copy.mem.sim_erase(block(e, game.get_block_size[e]));
+      if (f==0) not_feasible = true;
+    }
+    if (not_feasible || (replacement_idx <= 0)) {
       // This is just a second thresholding factor.
       //LRU
       std::cout << "[DRAM used LRU]" << std::endl;
@@ -167,13 +249,25 @@ int main(int argc, char* argv[]) {
           max = it->second;
       }*/
 
+      int replaced_time = 0;
       // Replace it.
       for (int e:opt_replace[replacement_idx]) {
-        generalized_runtime += generalized_copy.mem.erase(block(e, game.get_block_size[e]));
+        replaced_time += generalized_copy.mem.erase(block(e, game.get_block_size[e]));
       }
 
-      generalized_runtime += generalized_copy.mem.write(b);
-      generalized_copy.update_recency(b, i);
+
+      int f = generalized_copy.mem.write(b);
+      if(f==0) {
+        for (int e:opt_replace[replacement_idx]) {
+          generalized_copy.mem.write(block(e, game.get_block_size[e]));
+        }
+        std::cout << "[DRAM used LRU]" << std::endl;
+        generalized_runtime += generalized_copy.access(b, i);
+      } else {
+        generalized_runtime += replaced_time;
+        generalized_runtime += f;
+        generalized_copy.update_recency(b, i);
+      }
       
     }
 
@@ -193,4 +287,10 @@ int main(int argc, char* argv[]) {
   std::cout << "\nFinal runtimes for access----------- " << std::endl;
   std::cout << "Generalized_runtime: " << generalized_runtime << std::endl;
   std::cout << "GCP_runtime: " << gcp_runtime << std::endl;
+
+  if (COLLECT_DATA) {
+    std::ofstream fh_out("analysis.txt", std::fstream::app);
+    fh_out << generalized_runtime << "," << gcp_runtime << std::endl;
+    fh_out.close();
+  }
 }

@@ -6,8 +6,10 @@
 
 #include <string>
 #include <fstream>
+#include <sstream>
 
-static const OUTPUT_TO_FILE = true;
+static const bool OUTPUT_TO_FILE = true;
+static const bool COLLECT_DATA = true;
 //#include <filesystem>
 
 /*
@@ -47,6 +49,120 @@ def OPT_DP(const block b, const std::vector<block>& cache) {
 
 }*/
 
+
+// Brute force
+// do not run this parallelized
+void brute_force_search(int idx,
+                        BlockMemory mem,
+                        Game& g,
+                        std::string s,
+                        int total_time,
+                        std::vector<std::pair<int,std::string>>& brute_force_solns,
+                        bool same_level=false,
+                        int lookahead_k=-1,
+                        int lookahead_counter=-1) {
+  if ((g.access_sz > 20) && lookahead_counter == -1) return;
+    /*std::cout << "doing stuff on idx " << idx << " where s " << s;
+    std::cout << " and time " << total_time << " from " << same_level;
+    std::cout <<  " and lookaheads " << lookahead_k << " " << lookahead_counter << std::endl;*/
+  if ((idx < g.access_sz) &&
+       (((lookahead_k == -1) && (lookahead_counter == -1))
+         || (lookahead_counter < lookahead_k))) {
+    block b = block(g.accesses[idx], g.get_block_size[g.accesses[idx]]);
+    int access_time = mem.read(b);
+    if (access_time !=0) {
+      if (lookahead_counter != -1) lookahead_counter++;
+      // no need to do any more
+      if (same_level){
+        std::string new_str=s;
+        new_str = new_str.substr(0, new_str.size()-1);
+        new_str += " _ ";
+        brute_force_search(idx+1, mem, g,
+                           new_str,
+                           total_time,
+                           brute_force_solns, false,
+                           lookahead_k, lookahead_counter);
+      }else{
+        brute_force_search(idx+1, mem, g, s+"_ ", total_time,
+                           brute_force_solns, false, lookahead_k,
+                           lookahead_counter);
+      }
+    }
+
+    // try to write
+    if (mem.get_free_mem() >= b.second) {
+      if (lookahead_counter != -1) lookahead_counter++;
+      int write_time = mem.write(b);
+      if (same_level){
+        std::string new_str=s;
+        new_str = new_str.substr(0, new_str.size()-1);
+        new_str += " ";
+        brute_force_search(idx+1, mem, g,
+                           new_str,
+                           total_time+write_time,
+                           brute_force_solns, false, lookahead_k,
+                           lookahead_counter);
+      }else{
+        brute_force_search(idx+1, mem, g, s+"_ ",
+                           total_time+write_time,
+                           brute_force_solns, false, lookahead_k,
+                           lookahead_counter);
+      }
+    } else {
+      // try every combination
+      std::unordered_map<block, bool, hash_pair> data = mem.get();
+      for (auto it=data.begin(); it != data.end(); it++) {
+        // not sure why I had that not true bug
+        // maybe due to the copy
+        int erase_time = mem.erase(it->first);
+        brute_force_search(idx, mem, g,
+                           s+std::to_string(it->first.first)+",",
+                           total_time + erase_time,
+                           brute_force_solns,
+                           true, lookahead_k, lookahead_counter);
+      }
+    }
+  } else {
+    brute_force_solns.push_back(std::pair<int,std::string>(total_time, s));
+  }
+}
+
+std::pair<int,std::string> brute_force(BlockMemory& mem, Game& g) {
+  std::vector<std::pair<int, std::string>> brute_force_solutions;
+  int min_time = 0;
+  std::string min_solution = "";
+  brute_force_search(0, mem, g, min_solution, min_time,
+                     brute_force_solutions); 
+  std::sort(brute_force_solutions.begin(), brute_force_solutions.end(),
+            [](const std::pair<int,std::string>& a,
+               const std::pair<int,std::string>& b) {
+              return a.first < b.first;
+            });
+  if (brute_force_solutions.size() == 0){
+    std::cout << "Access sequence too long for brute force." << std::endl;
+    return std::pair<int, std::string> (1e6,"");
+  }
+  return brute_force_solutions.at(0);
+}
+
+// lookahead k brute force
+std::pair<int,std::string> lookahead_k_brute_force(int idx, BlockMemory& mem, Game& g) {
+  std::vector<std::pair<int, std::string>> brute_force_solutions;
+  int min_time = 0;
+  std::string min_solution = "";
+  brute_force_search(idx, mem, g, min_solution, min_time,
+                     brute_force_solutions, false, 3, 0); 
+  std::sort(brute_force_solutions.begin(), brute_force_solutions.end(),
+            [](const std::pair<int,std::string>& a,
+               const std::pair<int,std::string>& b) {
+              return a.first < b.first;
+            });
+  if (brute_force_solutions.size() == 0){
+    std::cout << "Access sequence too long for brute force." << std::endl;
+    return std::pair<int, std::string> (1e6,"");
+  }
+  return brute_force_solutions.at(0);
+}
 // Slightly better than brute force OPT.
 int bf_search(int idx, BlockMemory& mem, Game g) {
   if (idx < g.access_sz) {
@@ -143,9 +259,10 @@ int bs_search(int idx, BlockMemory& mem, Game g) {
 
   for (auto it = data.begin(); it != data.end(); ++it) {
     int i = idx;
-    size_t weight = 0;
-    while(i<g.access_sz && g.accesses[i]!=it->first.first) {
-      weight += g.get_block_size[i];
+    size_t weight = (g.access_sz*(g.access_sz+1)*0.5)+1;
+    while(i<g.access_sz) {
+      if (g.accesses[i]!=it->first.first)
+        weight -= (g.access_sz - i);
       i++;
     }
     cache.push_back(std::pair<block, int>(it->first, weight));
@@ -239,7 +356,19 @@ int main(int argc, char* argv[]){
   Game game;
 
   std::string txt_file = argv[1];
-  parse_Game(txt_file, game);
+  // hack
+  std::cout << txt_file << std::endl;
+  if (txt_file.at(0) == '.')
+    parse_Game(txt_file, game);
+  else {
+    std::istringstream iss(txt_file);
+    std::vector<int> accesses;
+    std::string result;
+    while (std::getline(iss, result, ' ')) {
+      accesses.push_back(std::stoi(result));
+    }
+    parse_Game(accesses, game);
+  }
   /*std::ifstream fh_access(txt_file, std::ifstream::in);
   std::string line;
 
@@ -304,6 +433,10 @@ int main(int argc, char* argv[]){
   bbDRAM.change_name("bbDRAM");
   BlockMemory bsDRAM(DRAM);
   bsDRAM.change_name("bsDRAM");
+  BlockMemory bfDRAM(DRAM);
+  bfDRAM.change_name("bfDRAM");
+  BlockMemory bflkDRAM(DRAM);
+  bflkDRAM.change_name("bflkDRAM");
 
   std::string opt;
   int total_run_time = 0;
@@ -314,6 +447,10 @@ int main(int argc, char* argv[]){
     opt += info.second + " ";
     std::cout << "info.second |" << info.second << std::endl; 
   }
+  if (COLLECT_DATA) {
+    std::ofstream fh_out("opt_analysis.txt", std::fstream::app);
+    fh_out << total_run_time << ",";
+  }
   std::cout << "bbsearch: " << total_run_time << std::endl;
   std::cout << bbDRAM << std::endl;
 
@@ -321,8 +458,50 @@ int main(int argc, char* argv[]){
   for(int i=0; i<game.access_sz; ++i) {
     total_run_time += bs_search(i, bsDRAM, game);
   }
+  if (COLLECT_DATA) {
+    std::ofstream fh_out("opt_analysis.txt", std::fstream::app);
+    fh_out << total_run_time << ",";
+  }
   std::cout << "bssearch: " << total_run_time << std::endl;
   std::cout << bsDRAM << std::endl;
+
+  std::pair<int, std::string> bf = brute_force(bfDRAM, game);
+  if (COLLECT_DATA) {
+    std::ofstream fh_out("opt_analysis.txt", std::fstream::app);
+    fh_out << bf.first << ",";
+  }
+  std::cout << "bfsearch: " << bf.first << std::endl;
+  //std::cout << bfDRAM << std::endl;
+
+  total_run_time = 0;
+  for(int i=0; i<game.access_sz; ++i) {
+    block b = block(game.accesses[i], game.get_block_size[game.accesses[i]]);
+    int read_time = bflkDRAM.read(b);
+    if (read_time != 0) continue;
+    BlockMemory bflkDRAM_copy(bflkDRAM);
+    bflkDRAM_copy.change_name("bflkDRAM_copy");
+    std::pair<int, std::string> bflk = lookahead_k_brute_force(i, bflkDRAM_copy, game);
+    std::cout << "bflk: " << bflk.second << std::endl;
+
+    std::istringstream iss(bflk.second);
+    std::string result;
+    std::getline(iss, result, ' ');
+    if (result != "_") {
+      std::cout << "result: " << result << " " << (result != "_") << std::endl;
+      std::istringstream iss_id(result);
+      std::string result_id;
+      while (std::getline(iss_id, result_id, ',')) {
+        int block_id = std::stoi(result_id);
+        total_run_time += bflkDRAM.erase(block(block_id, game.get_block_size[block_id]));
+      }
+    }
+    total_run_time += bflkDRAM.write(block(game.accesses[i], game.get_block_size[game.accesses[i]]));
+  }
+  if (COLLECT_DATA) {
+    std::ofstream fh_out("opt_analysis.txt", std::fstream::app);
+    fh_out << total_run_time << ",";
+  }
+  std::cout << "bflksearch: " << total_run_time << std::endl;
 
   BlockMemory gcpDRAM(DRAM);
   gcpDRAM.change_name("gcpDRAM");
@@ -330,6 +509,10 @@ int main(int argc, char* argv[]){
   total_run_time = 0;
   for(int i=0; i<game.access_sz; ++i) {
     total_run_time += gcp.access(block(game.accesses[i], game.get_block_size[game.accesses[i]]), i);
+  }
+  if (COLLECT_DATA) {
+    std::ofstream fh_out("opt_analysis.txt", std::fstream::app);
+    fh_out << total_run_time << std::endl;
   }
   std::cout << "lrucache: " << total_run_time << std::endl;
   gcp.print_memory();
@@ -349,9 +532,11 @@ int main(int argc, char* argv[]){
     access_string = access_string.substr(0, access_string.size()-1);
   
     std::cout << "\n" << access_string << std::endl;
-    std::cout << opt << std::endl;
+    //std::cout << opt << std::endl;
+    std::cout << bf.second << std::endl;
   
-    std::ofstream fh_out("test.txt", std::fstream::app);
+    //std::cout << "Output to file: " << txt_file << "_opt" <<  std::endl;
+    std::ofstream fh_out("library_temp.txt", std::fstream::app);
     fh_out << access_string << std::endl;
     fh_out << opt << std::endl;
     fh_out.close();

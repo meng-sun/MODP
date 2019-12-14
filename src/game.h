@@ -92,3 +92,9 @@ inline void parse_Game(std::string txt_file, Game& game) {
   game.access_sz = game.accesses.size();
 
 }
+
+inline void parse_Game(std::vector<int> accesses, Game& game) {
+  game.access_sz = accesses.size();
+  game.accesses.resize(accesses.size());
+  std::copy(accesses.begin(), accesses.end(), game.accesses.begin());
+}
